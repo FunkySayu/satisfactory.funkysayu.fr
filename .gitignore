@@ -1,0 +1,12 @@
+# dependencies and build output
+node_modules/
+dist/
+
+# local inputs: game data exports, saves, exporter config, one-off scripts
+scratch/
+# files served by the container under /data/
+data/
+
+*.log
+.env
+.claude/settings.local.json
