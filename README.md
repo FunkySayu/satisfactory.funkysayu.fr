@@ -19,7 +19,7 @@ npm run dev          # http://localhost:5173
 Or with Docker (nginx serves the page and its static data):
 
 ```sh
-docker compose up --build   # http://localhost:8080
+docker compose up --build   # http://localhost:51847
 ```
 
 Files put in `./data/` are served under `/data/`, with CORS headers. Open them with the page parameters below.
