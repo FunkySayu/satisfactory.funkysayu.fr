@@ -72,9 +72,10 @@ export function buildCircuits(idx: ObjectIndex, names: Names, power: PowerGrid, 
     }
     depotCircuit.set(u.instanceName, found ?? (P.wired.has(u.instanceName) ? circuitOfSeg(P.segOf(u.instanceName)) : null));
   }
-  const circuit = (key: string, kind: Circuit['kind'], name: string, seg: string | null, extra: Partial<Circuit>): Circuit => {
+  /** boost = augmenter production boost of the circuit the card's machines run on (or would, once switched on). */
+  const circuit = (key: string, kind: Circuit['kind'], name: string, seg: string | null, extra: Partial<Circuit>, boost = 0): Circuit => {
     const c: Circuit = {
-      key, kind, name, priority: null, quadrant: null, quadrantFromTag: false, power: P.sum(seg ? P.subtree(seg, true) : []), ownPower: P.sum(seg ? [seg] : []),
+      key, kind, name, priority: null, quadrant: null, quadrantFromTag: false, power: P.sum(seg ? P.subtree(seg, true) : [], boost), ownPower: P.sum(seg ? [seg] : [], boost),
       nested: [], parent: null, sloops: 0, sloopBy: {}, machines: {}, augmenters: 0, depotIn: [], members: [], ...extra,
     };
     if (!seg) return c;
@@ -112,7 +113,7 @@ export function buildCircuits(idx: ObjectIndex, names: Names, power: PowerGrid, 
     const c = circuit(sw.instanceName, 'switch', tag || `Switch ${sid(sw.instanceName)}`, b, {
       on: P.isOn(sw), priority: typeof pr === 'number' && pr >= 1 && pr <= 8 ? pr : null, pos: xyz(sw),
       parent: front ? (front === P.mainSeg ? 'Main grid' : parentSwitch ? switchName(parentSwitch) : P.rootOf.get(front) === P.mainSeg ? 'Main grid' : 'Isolated grid') : null,
-    });
+    }, b ? (P.isOn(sw) ? P.boostAt(b) : P.boostWhenOn(sw)) : 0);
     if (m) { c.quadrant = `X${m[1]}Y${m[2]}`; c.quadrantFromTag = true; }
     else { const ce = (b && centroid([b])) || [sw.transform!.translation.x / 100, sw.transform!.translation.y / 100]; c.quadrant = quadrantOf(ce[0], ce[1]); }
     if (!b) c.note = 'Both sides of this switch are on the same circuit (bypassed) or it is not wired.';
@@ -120,8 +121,9 @@ export function buildCircuits(idx: ObjectIndex, names: Names, power: PowerGrid, 
     else if (P.rootOf.get(b) !== P.mainSeg) c.note = 'This switch is not connected to the main grid.';
     circuits.push(c);
   }
-  const main = circuit('main', 'main', 'Main grid', P.mainSeg, { note: 'Everything not behind a priority switch.' });
-  main.power = P.sum([P.mainSeg]); // own only for the main circuit; the live total is reported separately
+  const mainBoost = P.boostAt(P.mainSeg);
+  const main = circuit('main', 'main', 'Main grid', P.mainSeg, { note: 'Everything not behind a priority switch.' }, mainBoost);
+  main.power = P.sum([P.mainSeg], mainBoost); // own only for the main circuit; the live total is reported separately
   circuits.push(main);
   let islandN = 0;
   for (const s of P.segsBySize) if (P.rootOf.get(s) === s && s !== P.mainSeg && (P.segMachines.get(s)?.length ?? 0) > 0) {
@@ -129,7 +131,7 @@ export function buildCircuits(idx: ObjectIndex, names: Names, power: PowerGrid, 
     circuits.push(circuit('island:' + s, 'island', `Separate grid #${++islandN}`, s, {
       note: 'Not connected to the main grid, even with every switch on.',
       quadrant: ce ? quadrantOf(ce[0], ce[1]) : null, pos: ce ? [Math.round(ce[0]), Math.round(ce[1])] : undefined,
-    }));
+    }, P.boostAt(s)));
   }
   // groups that run negative although they have generators
   for (const c of circuits) {
@@ -139,11 +141,14 @@ export function buildCircuits(idx: ObjectIndex, names: Names, power: PowerGrid, 
   }
 
   // one row per powered building, keyed to the circuit that owns it
+  // generation of each building includes the augmenter boost of its circuit, like the circuit totals
+  const boostOf = new Map(circuits.map(c => [c.key, c.power.boost ?? 0]));
   const machines: MachineRow[] = P.machines.filter(b => P.powered(b)).map(b => {
     const m = P.of(b); const p = buildings.productivity(b);
+    const c = P.wired.has(b.instanceName) ? circuitOfSeg(P.segOf(b.instanceName)) : null; const k = 1 + (c ? boostOf.get(c) ?? 0 : 0);
     return {
-      c: P.wired.has(b.instanceName) ? circuitOfSeg(P.segOf(b.instanceName)) : null, b: names.building(b), r: names.recipe(b), clk: round(clockOf(b)),
-      sl: buildings.sloops(b), gen: round(m.gen), maxGen: round(m.maxGen), draw: round(m.draw), maxDraw: round(m.maxDraw), prod: p === null ? null : round(p),
+      c, b: names.building(b), r: names.recipe(b), clk: round(clockOf(b)),
+      sl: buildings.sloops(b), gen: round(m.gen * k), maxGen: round(m.maxGen * k), draw: round(m.draw), maxDraw: round(m.maxDraw), prod: p === null ? null : round(p),
       at: xyz(b), id: sid(b.instanceName),
     };
   });
@@ -159,5 +164,5 @@ export function buildCircuits(idx: ObjectIndex, names: Names, power: PowerGrid, 
   depotStored.sort((a, b) => b.n - a.n);
   const sloops: SloopCount = { machines: machines.reduce((a, r) => a + r.sl, 0), augmenters, augmenterSloops: augmenters * 10, depot: depotStored.find(d => d.item === 'Desc_WAT1_C')?.n ?? 0 };
 
-  return { circuits, machines, sloops, depotStored, live: P.sum(P.subtree(P.mainSeg, true)) };
+  return { circuits, machines, sloops, depotStored, live: P.sum(P.subtree(P.mainSeg, true), mainBoost) };
 }

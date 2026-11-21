@@ -8,7 +8,7 @@ import { AUGMENTER, GameIcon, MERCER, PowerGlyph, SLOOP } from './icons';
 import { ChecksList, NetTable, type IssueContext } from './Issues';
 import { MachineTable } from './MachineTable';
 import { Tip } from './Tooltip';
-import { CloseButton, Coords, Count, Delta, Eyebrow, PlainCoords, PowerBar, Quadrant, SevBadges, useBlockMW } from './ui';
+import { boostPct, CloseButton, Coords, Count, Delta, Eyebrow, PlainCoords, PowerBar, Quadrant, SevBadges, useBlockMW } from './ui';
 
 const close = () => setState({ open: null });
 const H4 = ({ children }: { children: ReactNode }) => <h4 className="mt-2.5 font-head font-semibold text-[15px] flex gap-2 items-baseline">{children}</h4>;
@@ -41,7 +41,7 @@ function CardDrawer({ c, report }: { c: Card; report: SaveReport }) {
     </Head>
     {c.note && <p className="m-0 px-3 py-2 bg-panel-2 rounded-[3px] text-muted">{c.note}</p>}
     <Kpis>
-      <div><span className="label">Generated</span><KpiValue>{mw(p.gen)}</KpiValue><span className="sub">max {mw(p.maxGen)} · {p.gens} gens{p.idleGens ? `, ${p.idleGens} idle` : ''}</span></div>
+      <div><span className="label">Generated</span><KpiValue>{mw(p.gen)}</KpiValue><span className="sub">max {mw(p.maxGen)} · {p.gens} gens{p.idleGens ? `, ${p.idleGens} idle` : ''}{p.boost ? ` · ${boostPct(p.boost)} augmenters` : ''}</span></div>
       <div><span className="label">Drawn</span><KpiValue>{mw(p.draw)}</KpiValue><span className="sub">max {mw(p.maxDraw)} · {p.consumers} consumers</span></div>
       <div><span className="label">Delta</span><KpiValue><Delta v={p} /></KpiValue><span className="mt-1"><PowerBar p={p} step={step} /></span>
         <span className="sub">{signed(p.maxGen - p.maxDraw)} at full load{c.nested.length > 0 && c.kind !== 'main' ? ` · own circuit ${signed(c.ownPower.gen - c.ownPower.draw)}` : ''}</span></div>

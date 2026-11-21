@@ -84,8 +84,12 @@ export function PowerTable({ p }: { p: PowerSum }) {
     ['Drawn', mw(p.draw), `max ${mw(p.maxDraw)}`, plural(p.consumers, 'consumer')],
     ['Delta', signed(p.gen - p.draw), `max ${signed(p.maxGen - p.maxDraw)}`, 'at full load'],
   ];
-  return <table className="tipt tabular-nums"><tbody>{rows.map(r => <tr key={r[0]}><th>{r[0]}</th><td>{r[1]}</td><td>{r[2]}</td><td className="sub font-body!">{r[3]}</td></tr>)}</tbody></table>;
+  return <>
+    <table className="tipt tabular-nums"><tbody>{rows.map(r => <tr key={r[0]}><th>{r[0]}</th><td>{r[1]}</td><td>{r[2]}</td><td className="sub font-body!">{r[3]}</td></tr>)}</tbody></table>
+    {p.boost ? <p className="sub">Generation includes the {boostPct(p.boost)} boost of the Alien Power Augmenters on this circuit.</p> : null}
+  </>;
 }
+export const boostPct = (b: number) => `+${Math.round(b * 100)}%`;
 export function PowerTip({ c }: { c: Card }) {
   const p = c.power, o = c.ownPower;
   return <>
