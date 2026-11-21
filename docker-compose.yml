@@ -1,0 +1,10 @@
+services:
+  web:
+    build: .
+    image: satisfactory-circuit-board
+    ports:
+      - "8080:80"
+    volumes:
+      # files served under /data/ (saves, blueprints.tar.gz, snapshots)
+      - ./data:/srv/data:ro
+    restart: unless-stopped

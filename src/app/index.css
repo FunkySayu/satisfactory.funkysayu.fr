@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* Palette: in-game FICSIT circuit-break panel. Dark-first (graphite panels like the game), light variant for daylight.
+   Raw values live on :root so the theme toggle (data-theme) and the system preference can swap them; Tailwind
+   utilities (bg-panel, text-muted, border-line...) read them through @theme below. */
+:root {
+  --bg: #121417; --panel: #1d2024; --panel-2: #262a2f; --head: #30353b; --line: #3a3f46;
+  --fg: #e9e7e2; --muted: #9b9d9f; --faint: #6c7074;
+  --brand: #f39a3d; --focus: #8fb8ff;
+  --err: #ef4b4f; --warn: #f59a23; --info: #7fa8d6; --pos: #4cc38a; --neg: #f07a7a; --sloop: #b78cff;
+  --depot-bg: #0b0c0e; --depot-fg: #e9e7e2;
+  --bar-bg: #2c3136; --bar-max: #6f767d;
+  --err-bg: rgba(239, 75, 79, .17); --err-fg: #ff9a9c; --warn-bg: rgba(245, 154, 35, .17); --warn-fg: #ffbe6b;
+  --edge: #80868d; --hl: #f39a3d;
+  --shadow: 0 12px 40px rgba(0, 0, 0, .45);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #e7e9ec; --panel: #f7f8f9; --panel-2: #eceef1; --head: #dfe2e6; --line: #c9cdd3;
+    --fg: #1d2126; --muted: #5d636a; --faint: #8a9097; --focus: #2f6fd6;
+    --err: #d32f34; --warn: #c26a00; --info: #3c6fa8; --pos: #1d8a57; --neg: #c2413f; --sloop: #7a4fd0;
+    --bar-bg: #dcdfe3; --bar-max: #969ca3;
+    --err-bg: #fbe1e1; --err-fg: #a8262b; --warn-bg: #fcebd3; --warn-fg: #8f4d00; --edge: #8d939a; --hl: #d06f08;
+    --shadow: 0 12px 40px rgba(20, 30, 40, .18);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #e7e9ec; --panel: #f7f8f9; --panel-2: #eceef1; --head: #dfe2e6; --line: #c9cdd3;
+  --fg: #1d2126; --muted: #5d636a; --faint: #8a9097; --focus: #2f6fd6;
+  --err: #d32f34; --warn: #c26a00; --info: #3c6fa8; --pos: #1d8a57; --neg: #c2413f; --sloop: #7a4fd0;
+  --bar-bg: #dcdfe3; --bar-max: #969ca3;
+  --err-bg: #fbe1e1; --err-fg: #a8262b; --warn-bg: #fcebd3; --warn-fg: #8f4d00; --edge: #8d939a; --hl: #d06f08;
+  --shadow: 0 12px 40px rgba(20, 30, 40, .18);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #fff;
+  --color-black: #000;
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-head: var(--head);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-focus: var(--focus);
+  --color-err: var(--err);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-sloop: var(--sloop);
+  --color-depot-bg: var(--depot-bg);
+  --color-depot-fg: var(--depot-fg);
+  --color-bar-bg: var(--bar-bg);
+  --color-bar-max: var(--bar-max);
+  --color-err-bg: var(--err-bg);
+  --color-err-fg: var(--err-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-fg: var(--warn-fg);
+  --color-edge: var(--edge);
+  --color-hl: var(--hl);
+
+  --font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-head: "Barlow Semi Condensed", "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-note: 12.5px;
+  --text-sm: 13px;
+  --text-base: 15px;
+
+  --shadow-panel: var(--shadow);
+  /* the board switches to its 5-column panel layout */
+  --breakpoint-board: 73.75rem;
+}
+
+@layer base {
+  html, body { min-height: 100%; }
+  body { @apply bg-bg text-fg font-body text-base/[1.45] antialiased; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  code { @apply font-mono text-[.9em]; }
+  table { border-collapse: collapse; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-1.5 px-3.5 py-[7px] border border-line rounded bg-panel-2 cursor-pointer font-medium text-fg no-underline
+      hover:bg-head disabled:opacity-40 disabled:cursor-default focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2;
+  }
+  .label { @apply font-head font-semibold text-2xs/[1.3] uppercase tracking-[.08em] text-muted; }
+  .sub { @apply text-muted text-note; }
+  .num { @apply font-mono tabular-nums; }
+  .link { @apply border-0 p-0 bg-transparent cursor-pointer text-left hover:underline; }
+  /* data tables */
+  .tbl { @apply overflow-x-auto border border-line rounded-[3px]; }
+  .tbl table { @apply w-full text-sm; }
+  .tbl th, .tbl td { @apply px-2 py-1.5 text-left align-top border-t border-line; }
+  .tbl thead th { @apply border-t-0 bg-panel-2 font-head font-semibold text-2xs uppercase tracking-[.06em] text-muted whitespace-nowrap; }
+  .tbl .numc, .numc { @apply text-right! font-mono tabular-nums whitespace-nowrap; }
+  /* tooltip tables */
+  .tipt th { @apply text-left font-semibold pr-2.5 py-px; }
+  .tipt td { @apply pr-2.5 py-px font-mono; }
+}
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

@@ -1,0 +1,31 @@
+{
+  "name": "satisfactory-circuit-board",
+  "version": "1.0.0",
+  "description": "Reads a Satisfactory save or blueprints in the browser and checks power circuits, belt and pipe networks and coal power plants.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc",
+    "check": "tsx test/run.ts",
+    "check:bp": "tsx test/bp.ts"
+  },
+  "dependencies": {
+    "@etothepii/satisfactory-file-parser": "^4.1.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^7.0.0"
+  }
+}
