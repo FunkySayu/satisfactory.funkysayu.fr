@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    image: satisfactory-circuit-board
+    ports:
+      # loopback only: the host's nginx (login, TLS) proxies to it
+      - "127.0.0.1:51847:80"
+    volumes:
+      # files served under /data/ (saves, blueprints.tar.gz, snapshots)
+      - ./data:/srv/data:ro
+    restart: unless-stopped
