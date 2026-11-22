@@ -1,5 +1,5 @@
 // Power grid: wires join buildings into circuit segments, priority switches join segments into a tree rooted at the
-// main grid (the biggest segment). Also the power each building generates / draws, now and at full load, and the
+// main grid (the segment most switches hang off). Also the power each building generates / draws, now and at full load, and the
 // production boost of Alien Power Augmenters (the game computes it at runtime: the save does not store it).
 import { bool, cls, clockOf, num, owner, prop, push, val, UnionFind, type ObjectIndex, type SaveObject } from './objects';
 import type { GameData } from './gamedata';
@@ -68,7 +68,7 @@ export class PowerGrid {
     this.swEdges = this.switches.map(sw => ({ sw, a: this.segOf(sw.instanceName + '.PowerConnection1'), b: this.segOf(sw.instanceName + '.PowerConnection2') }));
     const segAdj = new Map<string, SwitchEdge[]>();
     for (const e of this.swEdges) if (e.a !== e.b) for (const s of [e.a, e.b]) push(segAdj, s, e);
-    // roots: biggest segment = main; other unvisited segments with machines become island roots
+    // roots: main (below); other unvisited segments with machines become island roots
     const bfs = (root: string) => {
       this.depth.set(root, 0); this.rootOf.set(root, root); const q = [root];
       for (let i = 0; i < q.length; i++) for (const e of segAdj.get(q[i]) || []) {
@@ -77,7 +77,10 @@ export class PowerGrid {
       }
     };
     this.segsBySize = [...segSize.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
-    this.mainSeg = this.segsBySize[0] ?? 'none';
+    // main grid = the hub the priority switches fan out from (most switches attached), biggest on a tie: a big plant
+    // behind its switch can outgrow the hub's own segment
+    const deg = (s: string) => segAdj.get(s)?.length ?? 0;
+    this.mainSeg = this.segsBySize.reduce<string | undefined>((m, s) => m === undefined || deg(s) > deg(m) ? s : m, undefined) ?? 'none';
     bfs(this.mainSeg);
     for (const s of this.segsBySize) if (!this.depth.has(s) && (this.segMachines.get(s)?.length || segAdj.has(s))) bfs(s);
     // behind side of each switch
