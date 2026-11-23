@@ -7,6 +7,7 @@ import { COAL_PLANT_ANALYZER } from './coal_plant';
 import { POWER_BALANCE_ANALYZER } from './power_balance';
 import { BLUEPRINT_CONNECTIONS_ANALYZER } from './blueprint_connections';
 import { BLUEPRINT_POWER_ANALYZER } from './blueprint_power';
+import { MACHINE_RECIPE_ANALYZER } from './machine_recipe';
 
 export const ANALYZERS: Analyzer[] = [
   BELT_ANALYZER,
@@ -15,6 +16,7 @@ export const ANALYZERS: Analyzer[] = [
   POWER_BALANCE_ANALYZER,
   BLUEPRINT_CONNECTIONS_ANALYZER,
   BLUEPRINT_POWER_ANALYZER,
+  MACHINE_RECIPE_ANALYZER,
 ];
 
 export interface AnalysisResult {
