@@ -11,6 +11,7 @@ export const BLUEPRINT_CONNECTIONS_ANALYZER: Analyzer = {
   checks: {
     'bp.unconnected': { title: 'Machine not connected', why: 'This machine has a recipe but no belt or pipe connected at all inside the blueprint.', fix: 'Connect it, or remove it from the blueprint.' },
     'bp.openin': { title: 'Input open in the blueprint', why: "The recipe needs this input but none of the machine's ports for it is connected inside the blueprint. Fine if you connect it from outside after placing the blueprint.", fix: 'Connect the port inside the blueprint, or plan an outside line for it.' },
+    'bp.missingin': { title: 'Input missing', why: 'Some of this machine\'s inputs are connected inside the blueprint, but no line brings one of the items its recipe needs: each line is matched to the item it can carry (what every machine on it needs, minus what the machine\'s other lines already bring), and this item is left over. Usually a forgotten belt or pipe.', fix: 'Connect the open input of the machine to a line carrying this item.' },
     'bp.openout': { title: 'Output open in the blueprint', why: 'The machine makes this item but its output is not connected inside the blueprint. It stops when full unless connected from outside.', fix: 'Connect the output inside the blueprint, or plan an outside line for it.' },
   },
   run(save) {
@@ -28,7 +29,19 @@ export const BLUEPRINT_CONNECTIONS_ANALYZER: Analyzer = {
       for (const fluid of [false, true]) for (const dir of ['in', 'out'] as const) {
         const rates = dir === 'in' ? f.inp : f.out;
         const items = Object.keys(flows.pick(rates, fluid));
-        if (!items.length || flows.connectedPort(k, fluid, dir)) continue;
+        if (!items.length) continue;
+        if (flows.connectedPort(k, fluid, dir)) {
+          // partly wired: an input item that no line brings (the line deduction left it over), so a belt / pipe is missing
+          if (dir !== 'in') continue;
+          const got = new Set<string>(); for (const n of save.networks.of(k)) for (const i of Object.keys(n.demand.get(k) ?? {})) got.add(i);
+          const miss = items.filter(i => !got.has(i)); if (!miss.length) continue;
+          const conn = lg.ports(k, fluid).filter(p => p.to && flows.portIs(k, p, fluid, 'in')).length;
+          const open = lg.ports(k, fluid).filter(p => !p.to && flows.portIs(k, p, fluid, 'in')).map(p => p.name);
+          out.push(makeIssue(save, 'error', 'build', 'bp.missingin',
+            `${names.building(o)} ${sid(k)}: ${conn} of ${items.length} ${fluid ? 'pipe' : 'belt'} inputs connected, no ${fluid ? 'pipe' : 'belt'} brings ${miss.map(i => `${names.item(i)} (${fmt(rates[i])}/min)`).join(', ')}${open.length ? ` (open: ${open.join(', ')})` : ''}`, o,
+            { kv: save.buildings.details(o), views: viewsFor(save, [k]) }));
+          continue;
+        }
         const rate = items.map(i => `${fmt(rates[i])}/min ${names.item(i)}`).join(', ');
         out.push(makeIssue(save, 'warn', 'build', dir === 'in' ? 'bp.openin' : 'bp.openout',
           `${names.building(o)} ${sid(k)}: ${fluid ? 'pipe' : 'belt'} ${dir === 'in' ? 'input' : 'output'} not connected inside the blueprint (${rate} ${dir === 'in' ? 'must come from' : 'must go'} outside)`, o,
