@@ -78,6 +78,11 @@ export class Network {
   }
 }
 
+function* permutations<T>(xs: T[]): Generator<T[]> {
+  if (xs.length <= 1) { yield xs; return; }
+  for (let i = 0; i < xs.length; i++) for (const p of permutations([...xs.slice(0, i), ...xs.slice(i + 1)])) yield [xs[i], ...p];
+}
+
 export class Networks {
   readonly belts: Network[] = [];
   readonly pipes: Network[] = [];
@@ -90,10 +95,13 @@ export class Networks {
   private netsOf = new Map<string, Network[]>();
   private partNet = new Map<string, Network>();
   private assigned = new Map<string, Map<string, Network>>();
+  /** Blueprints: the item(s) each open input line can bring (see deduceLineItems). */
+  private lineItems = new Map<Network, Set<string>>();
 
   constructor(private idx: ObjectIndex, private lg: Logistics, private flows: Flows, private names: Names, private power: PowerGrid, private blueprint: boolean) {
     this.buildBelts(); this.buildPipes();
     for (const n of this.all) for (const t of n.transport) this.partNet.set(t.instanceName, n);
+    if (blueprint) this.deduceLineItems();
     for (const n of this.all) this.solve(n);
   }
 
@@ -145,6 +153,84 @@ export class Networks {
     this.pipes.push(...[...byRoot.values()].filter(n => n.terminals.size));
   }
 
+  /** Is this terminal's connection to the network an input (pipes: by the port names; belts: it is a sink). */
+  private feedsInto(t: SaveObject, n: Network) {
+    if (n.kind === 'belt') return true;
+    const ps = (this.lg.pipePorts.get(t.instanceName) || []).filter(p => p.to && (n.transport.some(x => x.instanceName === owner(p.to!)) || n.terminals.has(owner(p.to))));
+    return !ps.length || ps.some(p => !/Output/i.test(p.name));
+  }
+
+  /** Blueprints: what each open input line brings. A belt (or pipe) carries one item and every machine it feeds needs
+   *  that item:
+   *  1. a line with a producer inside carries what that producer makes;
+   *  2. otherwise its candidates are the intersection of the recipe inputs of the machines it feeds;
+   *  3. elimination: an item that already reaches a machine through another of its lines is not on this one;
+   *  4. lines left with the same candidates, as many lines as candidates, are interchangeable (the player puts any item
+   *     on any of them): one item each, choosing the assignment the lines can deliver best (narrow branches matter).
+   *  Steps 3-4 repeat until nothing changes. A line still left with several candidates keeps them all. */
+  private deduceLineItems() {
+    for (const [nets, fluid] of [[this.belts, false], [this.pipes, true]] as const) {
+      const cand = new Map<Network, Set<string>>();
+      const fixed = new Set<Network>();   // decided: a single item, or what a producer inside makes
+      const feeds = (n: Network) => n.sinks.filter(t => !t.virtual && this.feedsInto(t, n));
+      const need = (t: SaveObject) => Object.keys(this.flows.pick(this.flows.of(t).inp, fluid));
+      for (const n of nets) {
+        if (![...n.terminals].some(t => this.flows.of(this.idx.at(t)).boundary)) continue;
+        let S: Set<string> | undefined;
+        for (const t of feeds(n)) { const w = need(t); if (!w.length) continue; S = S ? new Set([...S].filter(i => w.includes(i))) : new Set(w); }
+        if (!S || !S.size) continue;
+        const made = [...S].filter(i => n.sources.some(src => !src.virtual && this.flows.of(src).out[i]));
+        if (made.length) { cand.set(n, new Set(made)); fixed.add(n); } else cand.set(n, S);
+      }
+      // lines of each machine (only those with candidates), for elimination
+      const linesOf = new Map<SaveObject, Network[]>();
+      for (const n of cand.keys()) for (const t of feeds(n)) push(linesOf, t as any, n);
+      const capOf = (n: Network) => Math.max(0, ...n.transport.map(p => (fluid ? this.lg.pipeCap(p) : this.lg.beltCap(p)) ?? 0));
+      for (let changed = true; changed;) {
+        changed = false;
+        // 3. elimination
+        for (const [t, ls] of linesOf) for (const n of ls) {
+          if (fixed.has(n)) continue;
+          const taken = new Set<string>(); for (const o of ls) if (o !== n && cand.get(o)!.size === 1) taken.add([...cand.get(o)!][0]);
+          const left = [...cand.get(n)!].filter(i => !taken.has(i));
+          if (left.length && left.length < cand.get(n)!.size) { cand.set(n, new Set(left)); changed = true; }
+          if (cand.get(n)!.size === 1) { fixed.add(n); }
+        }
+        // 4. interchangeable groups
+        const groups = new Map<string, Network[]>();
+        for (const [n, S] of cand) if (!fixed.has(n) && S.size > 1) { const k = [...S].sort().join('|'); push(groups, k, n); }
+        for (const [k, g] of groups) {
+          const items = k.split('|'); if (g.length !== items.length || items.length > 5) continue;
+          let best: string[] = items, bestScore = -1;
+          for (const perm of permutations(items)) {
+            const score = g.reduce((a, n, j) => a + this.routable(n, perm[j], fluid), 0) + 1e-6 * g.reduce((a, n, j) => a + capOf(n) * (j === 0 ? 1 : 0), 0);
+            if (score > bestScore) { bestScore = score; best = perm; }
+          }
+          g.forEach((n, j) => { cand.set(n, new Set([best[j]])); fixed.add(n); });
+          changed = true;
+        }
+      }
+      for (const [n, S] of cand) this.lineItems.set(n, S);
+    }
+  }
+
+  /** How much of an item one open line can bring to the machines it feeds (max-flow from its open input ends). */
+  private routable(n: Network, item: string, fluid: boolean): number {
+    const ids = new Map<string, [number, number]>(); let N = 2;
+    for (const p of n.transport) { const a = N++, c = fluid ? this.lg.pipeCap(p) : this.lg.beltCap(p); ids.set(p.instanceName, [a, c != null ? N++ : a]); }
+    for (const t of n.terminals) { const a = N++; ids.set(t, [a, a]); }
+    const g = new FlowGraph(N);
+    for (const p of n.transport) { const [a, b] = ids.get(p.instanceName)!; const c = fluid ? this.lg.pipeCap(p) : this.lg.beltCap(p); if (c != null) g.addEdge(a, b, c); }
+    const adj = fluid ? this.lg.pAdj : this.lg.bOut;
+    for (const [k, [, out]] of ids) for (const y of adj.get(k) || []) { const t = ids.get(y); if (t) g.addEdge(out, t[0], 1e9); }
+    for (const t of n.terminals) {
+      const o = this.idx.at(t), [a] = ids.get(t)!;
+      if (this.flows.of(o).boundary) g.addEdge(0, a, 1e9);
+      else if (n.sinks.includes(o) && this.feedsInto(o, n)) { const r = this.flows.of(o).inp[item]; if (r) g.addEdge(a, 1, r); }
+    }
+    return g.maxflow(0, 1);
+  }
+
   /** Blueprints: a machine whose inputs can only come from outside, through several open lines, gets each item on one
    *  line (largest first, onto the line with the most belt capacity left) instead of counting it on every line. */
   private assign(t: SaveObject, fluid: boolean, cands: Network[], item: string): Network {
@@ -153,6 +239,10 @@ export class Networks {
     if (!m) {
       m = new Map(); this.assigned.set(k, m);
       const want = Object.entries(this.flows.pick(this.flows.of(t).inp, fluid)).sort((a, b) => b[1] - a[1]);
+      // a line that already brings another of this machine's inputs from a producer inside is taken by that input
+      const made = (x: Network) => x.sources.some(s => s.instanceName !== t.instanceName && want.some(([i]) => this.flows.of(s).out[i]));
+      const free = cands.filter(x => !made(x));
+      if (free.length) cands = free;
       const capIn = (x: Network) => {
         let c = 0;
         for (const u of this.lg.bIn.get(t.instanceName) || []) if (x.transport.some(p => p.instanceName === u)) c = Math.max(c, this.lg.beltCap(this.idx.at(u)) ?? 1e9);
@@ -186,6 +276,9 @@ export class Networks {
         const nets = this.of(t.instanceName).filter(x => x.kind === n.kind && x.sinks.includes(t));
         const others = (x: Network) => x.sources.filter(s => s.instanceName !== t.instanceName);
         let carriers = nets.filter(x => others(x).some(s => flows.of(s).out[i]));
+        // an open line deduced to bring this item; none of them, and the machine has an open port: it comes in there
+        if (!carriers.length && this.blueprint) carriers = nets.filter(x => this.lineItems.get(x)?.has(i));
+        if (!carriers.length && this.blueprint && flows.openPort(t.instanceName, fluid, 'in')) continue;
         if (!carriers.length) carriers = nets.filter(x => others(x).some(s => flows.of(s).unknown || flows.of(s).boundary));
         if (this.blueprint && carriers.length > 1 && carriers.every(x => !others(x).some(s => flows.of(s).out[i]))) carriers = [this.assign(t, fluid, carriers, i)];
         if (!carriers.length && this.blueprint && flows.openPort(t.instanceName, fluid, 'in')) continue; // comes in through the machine's open port
